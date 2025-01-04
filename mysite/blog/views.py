@@ -1,15 +1,49 @@
 from django.shortcuts import render, get_object_or_404
 # importando el modelo
 from .models import Post
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.views.generic import ListView
+from .forms import EmailPostForm, CommentForm
+from django.core.mail import send_mail
+# uso de decoradores
+from django.views.decorators.http import require_POST
 # from django.http import Http404
+
+
+class PostListView(ListView):
+    """
+    Alternative post list view
+    """
+    queryset = Post.published.all()
+    # nombre del contexto que se pasara a la plantilla
+    # por defecto es object_list
+    context_object_name = 'posts'
+    paginate_by = 3
+    template_name = 'blog/post/list.html'
+    # pasa las paginas al template como page=page_obj
+
 
 # Create your views here.
 
 # objeto ruquest es requerido en todas las vistas
 def post_list(request):
-    # obtener los ultimos posts publicados
-    # con el manager pulished creado en el modelo
-    posts = Post.published.all()
+    # obteniendo una lista de posts
+    post_list = Post.published.all()
+    # objeto numero de posts por pagina
+    paginator = Paginator(post_list, 3)
+    # obteniendo el numero de la pagina el (,1) es por defecto
+    page_number = request.GET.get('page', 1)
+    try:
+        # retornamos los posts de la pagina
+        posts = paginator.page(page_number)
+    except PageNotAnInteger:
+        # si no es un numero entero retornamos la primera pagina
+        posts = paginator.page(1)
+    except EmptyPage:
+        # si la pagina no existe retornamos la ultima
+        # paginator.num_pages el numero de paginas es el mismo que la ultima pagina
+        posts = paginator.page(paginator.num_pages)
+
     # renderizar la plantilla con los posts
     return render(
         request, 
@@ -17,16 +51,113 @@ def post_list(request):
         {'posts': posts}
         )
 
-def post_detail(request, id):
+def post_detail(request, year, month, day, post):
     # retorna el post si cumple los parametros, publicado e id
     post = get_object_or_404(
         Post,
-        id=id,
-        status=Post.Status.PUBLISHED  # solo mostramos posts publicados
+        status=Post.Status.PUBLISHED,  # solo mostramos posts publicados
+        # obtenemos el objeto si este cumnple con lo siguiente 
+        slug=post,  # slug es el nombre en minuscula con guiones intermedios
+        # esto es posible por unique_for_date='publish' en el modelo
+        publish__year=year,
+        publish__month=month,
+        publish__day=day  # fecha publicada en el post
     )
-    # ubicacion del template y tambien mandamos el obbjeto post
+
+    # lista de comentarios activos para este post
+    # acceedemos a los comentarios por post.comments ya que se relacionaron en el modelo
+    comments = post.comments.filter(active=True)
+    # inicializamos el formulario
+    form = CommentForm()
+
+    # ubicacion del template y tambien mandamos el objeto post
     return render(
         request,
         'blog/post/detail.html',
-        {'post': post}
+        {
+            'post': post,
+            'comments': comments,
+            'form': form
+        }
+    )
+
+
+def post_share(request, post_id):
+    # Retrieve post by id
+    post = get_object_or_404(
+        Post,
+        id=post_id,
+        status=Post.Status.PUBLISHED
+    )
+    # variable que enviaremos si es que se envio el formulario
+    sent = False
+
+    if request.method == 'POST':
+        # Form was submitted
+        form = EmailPostForm(request.POST)
+        if form.is_valid():
+            # Form fields passed validation
+            cd = form.cleaned_data
+            # ... send email
+            # obtenemos la url absoluta del post
+            post_url = request.build_absolute_uri(
+                post.get_absolute_url()
+            )
+            subject = (
+                f"{cd['name']} ({cd['email']}) "
+                f"recommends you reading {post.title}"
+            )
+            message = (
+                f"Read {post.title} at {post_url}\n\n"
+                f"{cd['name']}'s comments: {cd['comments']}"
+            )
+            # enviamos el email en la forma del objeto de la libreria de django
+            send_mail(
+                subject,
+                message,
+                from_email=None,
+                recipient_list=[cd['to']]
+            )
+            sent = True
+
+
+    else:
+        # renderizamos el formulario vacio
+        form = EmailPostForm()
+    return render(
+        request,
+        'blog/post/share.html',
+        {
+            'post': post,
+            'form': form,
+            'sent': sent
+        }
+    )
+
+# decorador para que solo se pueda acceder por POST
+@require_POST
+def post_comment(request, post_id):
+    post = get_object_or_404(
+        Post,
+        id=post_id,
+        status=Post.Status.PUBLISHED
+    )
+    # variable que enviaremos si es que se envio el formulario
+    comment = None
+    # si se envio el formulario
+    form = CommentForm(request.POST)
+    if form.is_valid():
+        # se crea un objeto de tipo comment pero no se guarda en la base de datos
+        comment = form.save(commit=False)
+        # asignamos el post al comentario
+        comment.post = post
+        comment.save()
+    return render(
+        request,
+        'blog/post/comment.html',
+        {
+            'post': post,
+            'comment': comment,
+            'form': form
+        }
     )

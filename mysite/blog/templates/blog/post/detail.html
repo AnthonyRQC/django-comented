@@ -6,4 +6,34 @@
         Published {{ post.publish }} by {{ post.author }}
     </p>
     {{ post.body|linebreaks }}
+    <p>
+        <a href="{% url "blog:post_share" post.id %}">Share this post</a>
+    </p>
+    {# comments querySet de django ORM #}
+    {# el with nos permite asignar un valor a una nueva variable hasta endwith #}
+    {% with comments.count as total_comments %}
+    <h2>
+        {# aqui solo imprimimos un contador de cuantos comentarios hay #}
+        {# pluralize aumenta una s si hay 0 o mas de 1 comentario #}
+        {{ total_comments }} comment{{ total_comments|pluralize }}
+    </h2>
+    {% endwith %}
+
+    {# renderizamos los comentarios #}
+    {% for comment in comments %}
+        <div class="comment">
+            <p class="info">
+                {# contiene el contador de cada iteracion #}
+                Comment {{ forloop.counter }} by {{ comment.name }}
+                {{ comment.created }}
+            </p>
+            {{ comment.body|linebreaks }}
+        </div>
+    {# es un tag de si esta vacio (no hay comentarios) #}
+    {% empty %}
+        <p>There are no comments.</p>
+    {% endfor %}
+
+    {# incluimos el formulario de comentarios #}
+    {% include "blog/post/includes/comment_form.html" %}
 {% endblock %}

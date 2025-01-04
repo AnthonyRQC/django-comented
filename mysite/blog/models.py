@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+# para crear get_absolute_url
+from django.urls import reverse
 
 # Create your models here.
 
@@ -27,7 +29,12 @@ class Post(models.Model):
 
     title = models.CharField(max_length=250)
     # se guarda en str en la base de datos ayuda al SEO
-    slug = models.SlugField(max_length=250)
+    slug = models.SlugField(
+        max_length=250,
+        # unique_for_date se utiliza para evitar que un post con el mismo titulo
+        # y fecha de publicacion sean iguales
+        unique_for_date='publish'
+        )
 
     author = models.ForeignKey(
         # tabla usuarios de la autenticacion de django
@@ -79,3 +86,39 @@ class Post(models.Model):
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        return reverse(
+            'blog:post_detail', # obtenido de blog.urls.py
+            args=[
+                self.publish.year,
+                self.publish.month,
+                self.publish.day,
+                self.slug
+            ]
+        )
+
+
+class Comment(models.Model):
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        # relacion inversa para acceder a los comentarios de un post comment.post
+        # si no se da un related_name se crea uno por defecto comment_set
+        related_name='comments'
+    )
+    name = models.CharField(max_length=80)
+    email = models.EmailField()
+    body = models.TextField()
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['created']
+        # se crea un index para mejorar la velocidad de ordenamiento
+        indexes = [
+            models.Index(fields=['created']),
+        ]
+
+    def __str__(self):
+        return f'Comment by {self.name} on {self.post}'
