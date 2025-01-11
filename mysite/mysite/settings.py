@@ -28,16 +28,23 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Application definition - se activan las apps que se van a utilizar
+SITE_ID = 1
 
 # Application definition
-
+# It’s good practice to keep the Django packages at the top, third-party packages in the
+# middle, and local applications at the end of INSTALLED_APPS.
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'django.contrib.sites', # permitimos que la app sites cree databases y la activamos
+    'django.contrib.sitemaps', # permitimos que la app sitemaps cree databases y la activamos
     'django.contrib.staticfiles',
+    'django.contrib.postgres', # permitimos que la app postgres cree databases y la activamos
+    'taggit', # permitimos que la app taggit cree databases y la activamos
     'blog.apps.BlogConfig', # permitimos que la app blog cree databases y la activamos
 ]
 
@@ -77,8 +84,12 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        # 'PORT': "5432",
     }
 }
 

@@ -20,3 +20,6 @@ class CommentForm(forms.ModelForm):
         # se definen los campos que se mostraran en el formulario
         # estos campos se obtienen del modelo Comment
         fields = ('name', 'email', 'body')
+
+class SearchForm(forms.Form):
+    query = forms.CharField()

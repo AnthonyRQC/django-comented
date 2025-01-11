@@ -15,8 +15,16 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+# se importa el sitemap para poder utilizarlo en las urls
+from django.contrib.sitemaps.views import sitemap
 # include para agregar la aplicacion blog
 from django.urls import path, include
+# se importa el sitemap de la aplicacion blog
+from blog.sitemaps import PostSitemap
+
+sitemaps = {
+    'posts': PostSitemap,
+}
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -24,4 +32,6 @@ urlpatterns = [
     # se agrega el namespace como el nomre de la aplicacion
     # se refieren a los urls de la siguiente manera ej: blog:post_list
     path('blog/', include('blog.urls', namespace='blog')),
+    # se agrega la url del sitemap
+    path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
 ]

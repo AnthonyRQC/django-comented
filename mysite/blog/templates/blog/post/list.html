@@ -1,9 +1,16 @@
 {# heredamos de base.html #}
 {% extends "blog/base.html" %}
+{# cargamos los tags #}
+{% load blog_tags %}
 
+{# titulo de la pagina #}
 {% block title %}My Blog{% endblock %}
 {% block content %}
     <h1>My Blog</h1>
+    {% if tag %}
+        <h2>Posts tagged with "{{ tag.name }}"</h2>
+    {% endif %}
+
     {% for post in posts %}
         <h2>
             {# cambiando las urls dinamicas por absolutas #}
@@ -12,15 +19,29 @@
                 {{ post.title }}
             </a>
         </h2>
+        {# tags es un campo many to many #}
+        {# join es un filtro de django que une los tags con una coma #}
+        <p class="tags">
+            Tags: 
+            {% for tag in post.tags.all %}
+                {# cada tag tiene su url #}
+                <a href="{% url "blog:post_list_by_tag" tag.slug %}">
+                    {{ tag.name }}
+                    {# si no es el ultimo tag, ponemos una coma #}
+                </a>{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+        </p>
         <p class="date">
             Published {{ post.publish }} by {{ post.author }}
         </p>
-        {{ post.body|truncatewords:30|linebreaks }}
+        {# markdown es un filtro que convierte el texto en HTML #}
+        {# el filtro truncatewords_html corta el texto en 30 palabras #}
+        {{ post.body|markdown|truncatewords_html:30 }}
     {% endfor %}
 
     {# incluimos la paginacion #}
     {# el objeto posts tiene el paginador #}
     {# incluimos el template pagination.html #}
     {# pasamos el objeto posts a la variable page #}
-    {% include "pagination.html" with page=page_obj %}
+    {% include "pagination.html" with page=posts %}
 {% endblock %}

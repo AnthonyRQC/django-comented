@@ -3,6 +3,8 @@ from django.db import models
 from django.utils import timezone
 # para crear get_absolute_url
 from django.urls import reverse
+# libreria para tags
+from taggit.managers import TaggableManager
 
 # Create your models here.
 
@@ -69,6 +71,9 @@ class Post(models.Model):
     objects = models.Manager() # the default manager
     # creamos un ojeto de nuestra clase creada PublishedManager
     published = PublishedManager()  # our custom manager
+
+    # tags
+    tags = TaggableManager()
 
     # meta es una clase dentro del modelo que tiene valores por defecto
     # los cuales actuan como propiedades extra del modelo

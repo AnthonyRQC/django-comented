@@ -3,11 +3,22 @@ from django.shortcuts import render, get_object_or_404
 from .models import Post
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.views.generic import ListView
-from .forms import EmailPostForm, CommentForm
+# importamos search de postgres
+from django.contrib.postgres.search import (
+    SearchQuery, SearchRank, SearchVector
+)
+# esto se puede editando el archivo de migraciones
+from django.contrib.postgres.search import TrigramSimilarity # importamos TrigramSimilarity para buscar posts similares
+from .forms import EmailPostForm, CommentForm, SearchForm
 from django.core.mail import send_mail
 # uso de decoradores
 from django.views.decorators.http import require_POST
+from taggit.models import Tag # importamos el modelo Tag
+from django.db.models import Count # importamos Count para contar los tags
+
 # from django.http import Http404
+
+
 
 
 class PostListView(ListView):
@@ -25,11 +36,17 @@ class PostListView(ListView):
 
 # Create your views here.
 
-# objeto ruquest es requerido en todas las vistas
-def post_list(request):
+# objeto request es requerido en todas las vistas
+def post_list(request, tag_slug=None):
     # obteniendo una lista de posts
     post_list = Post.published.all()
     # objeto numero de posts por pagina
+    tag = None
+    # si se pasa un tag_slug se filtra por tag
+    if tag_slug:
+        tag = get_object_or_404(Tag, slug=tag_slug)
+        post_list = post_list.filter(tags__in=[tag])
+
     paginator = Paginator(post_list, 3)
     # obteniendo el numero de la pagina el (,1) es por defecto
     page_number = request.GET.get('page', 1)
@@ -48,8 +65,11 @@ def post_list(request):
     return render(
         request, 
         'blog/post/list.html', 
-        {'posts': posts}
-        )
+        {
+            'posts': posts,
+            'tag': tag
+         }
+    )
 
 def post_detail(request, year, month, day, post):
     # retorna el post si cumple los parametros, publicado e id
@@ -70,6 +90,19 @@ def post_detail(request, year, month, day, post):
     # inicializamos el formulario
     form = CommentForm()
 
+    # lista de tags del post
+    # flat=True para obtener una lista de valores en lugar de objetos
+    post_tags_ids = post.tags.values_list('id', flat=True)
+    # obtenemos los posts que contienen los mismos tags
+    # excluimos el post actual
+    similar_posts = Post.published.filter(
+        tags__in=post_tags_ids
+    ).exclude(id=post.id)
+    # contamos los tags en comun y ordenamos por tags y fecha de publicacion
+    similar_posts = similar_posts.annotate(
+        same_tags=Count('tags')
+    ).order_by('-same_tags', '-publish')[:4]
+
     # ubicacion del template y tambien mandamos el objeto post
     return render(
         request,
@@ -77,7 +110,8 @@ def post_detail(request, year, month, day, post):
         {
             'post': post,
             'comments': comments,
-            'form': form
+            'form': form,
+            'similar_posts': similar_posts
         }
     )
 
@@ -159,5 +193,37 @@ def post_comment(request, post_id):
             'post': post,
             'comment': comment,
             'form': form
+        }
+    )
+
+def post_search(request):
+    form = SearchForm()
+    query = None
+    results = []
+
+    # si se envio el formulario de busqueda y es valido se realiza la busqueda
+    if 'query' in request.GET:
+        form = SearchForm(request.GET)
+        if form.is_valid():
+            query = form.cleaned_data['query']
+            search_vector = SearchVector(
+                'title', weight='A' # titulo con peso A y cuerpo con peso B (1 y 0.4) respectivamente
+            ) + SearchVector('body', weight='B')
+            search_query = SearchQuery(query)
+            results = (
+                # anotamos el campo search con el vector de busqueda
+                Post.published.annotate(
+                    similarity = TrigramSimilarity('title', query) # calculamos la similitud con el titulo
+                )
+                .filter(similarity__gt=0.1) # filtramos los resultados con una similitud mayor a 0.1
+                .order_by('-similarity') # ordenamos por rank de mayor a menor
+            )
+    return render(
+        request,
+        'blog/post/search.html',
+        {
+            'form': form,
+            'query': query,
+            'results': results
         }
     )
